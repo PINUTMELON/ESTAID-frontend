@@ -83,53 +83,60 @@ export default function GalleryPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="flex items-center justify-center min-h-screen bg-dark-400">
         <div className="w-12 h-12 border-4 border-primary-100 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
+  const getGridSpan = (index: number) => {
+    const spans = [
+      "col-span-2 row-span-2 md:col-span-2 md:row-span-2", // Large
+      "col-span-1 row-span-1 md:col-span-1 md:row-span-1", // Small
+      "col-span-1 row-span-1 md:col-span-1 md:row-span-1", // Small
+      "col-span-1 row-span-2 md:col-span-1 md:row-span-2", // Tall
+      "col-span-2 row-span-1 md:col-span-2 md:row-span-1", // Wide
+      "col-span-1 row-span-1 md:col-span-1 md:row-span-1", // Small
+      "col-span-1 row-span-1 md:col-span-1 md:row-span-1", // Small
+      "col-span-2 row-span-2 md:col-span-2 md:row-span-2", // Large
+      "col-span-1 row-span-1 md:col-span-1 md:row-span-1", // Small
+    ];
+    return spans[index % spans.length];
+  };
+
   return (
-    <div className="min-h-screen pb-20">
-      {/* Grid Layout */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-        {items.map((item) => (
+    <div className="min-h-screen bg-black">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10 auto-rows-[250px] gap-0 grid-flow-dense">
+        {items.map((item, index) => (
           <div
             key={item.videoId}
-            className="group relative bg-dark-200 rounded-3xl overflow-hidden border border-white/5 hover:border-primary-100/50 transition-all duration-500 cursor-pointer shadow-2xl hover:shadow-primary-100/10 active:scale-[0.98]"
+            className={`${getGridSpan(index)} group relative overflow-hidden bg-dark-300 cursor-pointer`}
             onClick={() => handleSelectItem(item)}
           >
             {/* Thumbnail */}
-            <div className="aspect-[9/16] relative overflow-hidden bg-dark-400">
-              <img
-                src={item.thumbnailImageUrl}
-                alt={item.projectTitle}
-                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
-              
-              {/* Play Button Icon */}
-              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                <div className="w-16 h-16 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center border border-white/20">
-                  <svg className="w-8 h-8 text-white fill-current" viewBox="0 0 24 24">
+            <img
+              src={item.thumbnailImageUrl}
+              alt={item.projectTitle}
+              className="w-full h-full object-cover transition-all duration-1000 group-hover:scale-110 group-hover:brightness-75"
+            />
+            
+            {/* Minimal Overlay */}
+            <div className="absolute inset-x-0 bottom-0 p-6 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500 translate-y-4 group-hover:translate-y-0">
+              <h3 className="text-16 font-black text-white truncate mb-1">
+                {item.projectTitle}
+              </h3>
+              <div className="flex items-center justify-between">
+                <p className="text-12 text-white/50 font-bold uppercase tracking-wider">@{item.ownerUsername}</p>
+                <div className="w-8 h-8 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
+                  <svg className="w-4 h-4 text-white fill-current" viewBox="0 0 24 24">
                     <path d="M8 5v14l11-7z" />
                   </svg>
                 </div>
               </div>
             </div>
 
-            {/* Info Overlay (Bottom) */}
-            <div className="absolute bottom-0 left-0 right-0 p-5 space-y-1 transform translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
-              <h3 className="text-16 font-bold text-white truncate shadow-sm">
-                {item.projectTitle}
-              </h3>
-              <div className="flex items-center justify-between">
-                <p className="text-12 text-white/50">@{item.ownerUsername}</p>
-                <span className="text-10 text-white/30 uppercase tracking-wider">
-                  Scene {item.sceneNumber}
-                </span>
-              </div>
-            </div>
+            {/* Hover Accent */}
+            <div className="absolute inset-0 border-0 group-hover:border-4 border-primary-100/30 transition-all duration-300 pointer-events-none" />
           </div>
         ))}
       </div>

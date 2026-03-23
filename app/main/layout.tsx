@@ -32,7 +32,11 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <div className="min-h-screen bg-[#121212] text-white">
-      <header className="sticky top-0 z-50 w-full bg-[#1a1a1e]/80 backdrop-blur-md border-b border-white/5 px-8 py-3 flex items-center justify-between">
+      <header className={`${pathname === '/main/gallery' ? 'fixed' : 'sticky'} top-0 z-50 w-full backdrop-blur-md border-b px-8 py-3 flex items-center justify-between transition-all duration-500 ${
+        pathname === '/main/gallery' 
+          ? 'bg-black/10 border-white/10' 
+          : 'bg-[#1a1a1e]/80 border-white/5'
+      }`}>
         <Link href="/main/projects">
           <Image src="/images/logo.png" width={100} height={0} alt="플로티 로고" className=" cursor-pointer" />
         </Link>
@@ -70,7 +74,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           </button>
         </div>
       </header>
-      <main className="max-w-[1600px] mx-auto p-12">{children}</main>
+      <main className={pathname === '/main/gallery' ? 'w-full' : 'max-w-[1600px] mx-auto p-12'}>{children}</main>
     </div>
   );
 }
