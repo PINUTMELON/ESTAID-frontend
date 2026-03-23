@@ -10,9 +10,10 @@ import {
     ChevronRight,
     Loader2,
     RefreshCw,
-    AlertCircle
+    AlertCircle,
+    Star
 } from 'lucide-react';
-import { videoApi } from '@/app/_utils/api';
+import { videoApi, projectApi } from '@/app/_utils/api';
 
 interface SceneInfo {
     sceneNumber: number;
@@ -38,6 +39,33 @@ function GenerateContent() {
     const [isGenerating, setIsGenerating] = useState<Record<number, boolean>>({});
     const [progress, setProgress] = useState<Record<number, number>>({});
     const [error, setError] = useState<string | null>(null);
+
+    // 랜덤 타인 영상 (평가용) 상태
+    const [randomVideo, setRandomVideo] = useState<{videoId: string, videoUrl: string, projectId?: string} | null>(null);
+    const [randomVideoLoading, setRandomVideoLoading] = useState(false);
+    const [userRating, setUserRating] = useState(0);
+    const [ratingSubmitted, setRatingSubmitted] = useState(false);
+
+    const isAnyGenerating = Object.values(isGenerating).some(v => v);
+
+    useEffect(() => {
+        // 영상 생성 중이고, 아직 랜덤 영상을 검색하지 않았고, 제출도 완료 안 된 경우에만
+        if (isAnyGenerating && !randomVideo && !randomVideoLoading && !ratingSubmitted) {
+            setRandomVideoLoading(true);
+            videoApi.getRandom().then(res => {
+                if (res.success && res.data) {
+                    setRandomVideo(res.data);
+                }
+            }).catch(console.error).finally(() => setRandomVideoLoading(false));
+        }
+        
+        // 영상 생성이 모두 끝나면 상태 리셋 (다음에 আবার 팝업 띄우기 위함)
+        if (!isAnyGenerating) {
+            setRandomVideo(null);
+            setUserRating(0);
+            setRatingSubmitted(false);
+        }
+    }, [isAnyGenerating, randomVideo, randomVideoLoading, ratingSubmitted]);
 
     useEffect(() => {
         const fetchInfo = async () => {
@@ -196,7 +224,51 @@ function GenerateContent() {
             </aside>
 
             {/* Main Content */}
-            <main className="flex-1 flex flex-col p-10 gap-8 overflow-hidden">
+            <main className="flex-1 flex flex-col p-10 gap-8 overflow-hidden relative">
+                
+                {/* Random Video Rating Popup during generation */}
+                {isAnyGenerating && randomVideo && !ratingSubmitted && (
+                    <div className="absolute bottom-10 right-10 w-[380px] bg-[#0B0B0C] border border-white/10 rounded-3xl p-6 shadow-2xl flex flex-col gap-4 z-50 animate-in fade-in slide-in-from-right-10">
+                        <div className="flex justify-between items-center">
+                            <h3 className="text-13 font-black text-primary-300 tracking-wide uppercase flex items-center gap-2">
+                                🍕 타 창작자 디스커버리 
+                            </h3>
+                            <button onClick={() => setRatingSubmitted(true)} className="text-white/40 hover:text-white transition-colors">✕</button>
+                        </div>
+                        <p className="text-[11px] text-white/40 leading-relaxed font-medium">영상이 생성되는 동안 다른 창작자들의 멋진 씬을 감상하고 솔직한 평점을 남겨보세요!</p>
+                        
+                        <div className="aspect-video w-full rounded-2xl overflow-hidden bg-black relative border border-white/5 shadow-inner">
+                            <video src={randomVideo.videoUrl} autoPlay loop muted controls className="w-full h-full object-contain" />
+                        </div>
+                        
+                        <div className="bg-black/40 rounded-2xl p-4 flex flex-col items-center gap-3 border border-white/5">
+                            <span className="text-[10px] text-white/40 font-black tracking-widest uppercase">Select Rating (1-5)</span>
+                            <div className="flex gap-2">
+                                {[1, 2, 3, 4, 5].map(star => (
+                                    <Star 
+                                        key={star}
+                                        onClick={() => setUserRating(star)}
+                                        className={`w-7 h-7 cursor-pointer transition-all hover:scale-110 ${
+                                            star <= userRating ? "text-yellow-400 fill-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.5)]" : "text-white/10 hover:text-white/30"
+                                        }`}
+                                    />
+                                ))}
+                            </div>
+                            <button 
+                                disabled={userRating === 0}
+                                onClick={async () => {
+                                    const targetId = randomVideo.projectId || randomVideo.videoId;
+                                    await projectApi.rate(targetId, userRating);
+                                    setRatingSubmitted(true);
+                                }}
+                                className="mt-2 w-full py-2.5 rounded-xl bg-primary-100/20 text-primary-200 font-black text-[12px] uppercase tracking-widest hover:bg-primary-100/40 disabled:opacity-50 transition-colors"
+                            >
+                                평점 남기기
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 <header className="flex flex-col gap-2 shrink-0">
                     <div className="flex items-center gap-2">
                         <span className="w-6 h-[1px] bg-primary-100" />

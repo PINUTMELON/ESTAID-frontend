@@ -28,7 +28,7 @@ async function request<T>(
   options?: RequestInit
 ): Promise<ApiResponse<T>> {
   const token = getStoredToken();
-  const headers: Record<string, string> = { 
+  const headers: Record<string, string> = {
     ...(token ? { "Authorization": `Bearer ${token}` } : {}),
     ...(options?.headers as Record<string, string> || {}),
   };
@@ -134,7 +134,10 @@ export const projectApi = {
       {
         projectId: string;
         title: string;
-        backgroundImageUrl: string;
+        backgroundImageUrl: string | null;
+        thumbnailImageUrl?: string | null;
+        averageRating: number;
+        ratingCount: number;
         createdAt: string;
         updatedAt: string;
       }[]
@@ -165,6 +168,8 @@ export const projectApi = {
         plotId: string;
         plotTitle: string;
         sceneNumber: number;
+        sceneTitle: string | null;
+        thumbnail: string | null;
         images: {
           imageId: string;
           sceneNumber: number;
@@ -181,6 +186,12 @@ export const projectApi = {
           status: string;
           createdAt: string;
         };
+      }[];
+      assets: {
+        assetId: string;
+        type: "CHARACTER" | "BACKGROUND";
+        imageUrl: string;
+        prompt: string;
       }[];
     }>(`/projects/${projectId}`),
 
@@ -319,6 +330,14 @@ export const imageApi = {
 // ────────────────────────────────────────────────────────────
 
 export const videoApi = {
+  /** 랜덤 타인 영상 조회 (평가용) */
+  getRandom: () =>
+    request<{
+      videoId: string;
+      videoUrl: string;
+      projectId?: string;
+    }>("/video/random"),
+
   /** 영상 생성 (방식 A: projectId 기반) */
   generate: (body: {
     projectId: string;
@@ -457,6 +476,7 @@ export const rankingApi = {
         title: string;
         ownerUsername: string;
         backgroundImageUrl: string | null;
+        thumbnailImageUrl: string | null;
         averageRating: number;
         ratingCount: number;
         createdAt: string;

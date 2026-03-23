@@ -2,14 +2,17 @@
 
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Star } from "lucide-react";
 import { projectApi } from "../../_utils/api";
 
 interface Project {
   projectId: string;
   title: string;
-  backgroundImageUrl: string;
+  backgroundImageUrl: string | null;
+  thumbnailImageUrl?: string | null;
+  averageRating?: number;
+  ratingCount?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -40,6 +43,7 @@ export default function ProjectsPage() {
     try {
       const res = await projectApi.getAll();
       if (res.success) {
+        console.log("[DEBUG] Raw /projects API response:", res.data);
         setProjects(res.data);
       }
     } catch (error) {
@@ -166,12 +170,20 @@ export default function ProjectsPage() {
             className="aspect-[3/4] group relative bg-dark-200 rounded-[32px] overflow-hidden border border-white-300 hover:border-primary-100/40 transition-all duration-500 cursor-pointer shadow-xl flex flex-col active:scale-[0.98]"
           >
             <div className="flex-1 w-full overflow-hidden bg-dark-400 relative">
-              <img src={project.backgroundImageUrl || "/images/landing-bg.png"} alt={project.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out" />
+              <img src={project.thumbnailImageUrl || project.backgroundImageUrl || "/images/landing-bg.png"} alt={project.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
             <div className="p-6 space-y-1.5 bg-gradient-to-b from-transparent to-black/20 shrink-0">
               <h3 className="text-16 font-bold text-white/95 truncate group-hover:text-primary-100 transition-colors uppercase">{project.title}</h3>
-              <p className="text-12 text-white/20 font-medium">{formatDate(project.createdAt)}</p>
+              <div className="flex items-center justify-between">
+                 <p className="text-12 text-white/20 font-medium">{formatDate(project.createdAt)}</p>
+                 {project.ratingCount !== undefined && project.ratingCount > 0 && (
+                   <div className="flex items-center gap-1.5 text-primary-200">
+                     <Star className="w-3.5 h-3.5 fill-primary-200" />
+                     <span className="text-12 font-bold">{project.averageRating?.toFixed(1)}</span>
+                   </div>
+                 )}
+              </div>
             </div>
           </div>
         ))}

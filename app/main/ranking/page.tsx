@@ -10,6 +10,7 @@ interface RankingItem {
   title: string;
   ownerUsername: string;
   backgroundImageUrl: string | null;
+  thumbnailImageUrl: string | null;
   averageRating: number;
   ratingCount: number;
   createdAt: string;
@@ -125,7 +126,7 @@ export default function RankingPage() {
           <div className="lg:col-span-2 relative bg-[#1a1a20] rounded-3xl overflow-hidden group border border-white/5 cursor-pointer" onClick={() => handleSelectItem(top1)}>
             <div className="absolute top-6 left-6 z-10 bg-indigo-500 w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg shadow-xl border border-white/20">1</div>
             <img
-              src={top1.backgroundImageUrl || "/api/placeholder/800/450"}
+              src={top1.thumbnailImageUrl || top1.backgroundImageUrl || "/api/placeholder/800/450"}
               alt={top1.title}
               className="w-full h-80 object-cover opacity-80 group-hover:scale-105 transition-transform duration-700"
             />
@@ -158,7 +159,7 @@ export default function RankingPage() {
           {[top2, top3].filter(Boolean).map((item, idx) => (
             <div key={item.projectId} onClick={() => handleSelectItem(item)} className="relative bg-[#1a1a20] rounded-3xl overflow-hidden flex-1 group border border-white/5 cursor-pointer hover:border-indigo-500/30 transition-all shadow-2xl">
               <div className="absolute top-4 left-4 z-10 bg-indigo-500 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shadow-lg border border-white/10">{idx + 2}</div>
-              <img src={item.backgroundImageUrl || "/api/placeholder/400/225"} className="w-full h-40 object-cover opacity-60 group-hover:scale-110 transition-transform duration-500" />
+              <img src={item.thumbnailImageUrl || item.backgroundImageUrl || "/api/placeholder/400/225"} className="w-full h-40 object-cover opacity-60 group-hover:scale-110 transition-transform duration-500" />
               <div className="p-5">
                 <h3 className="text-xl font-bold mb-2 truncate italic tracking-tight">{item.title}</h3>
                 <div className="flex justify-between text-gray-500 text-xs font-bold uppercase tracking-widest">
@@ -187,7 +188,7 @@ export default function RankingPage() {
                 {item.rank.toString().padStart(2, '0')}
               </div>
               <div className="relative w-32 h-20 rounded-xl overflow-hidden flex-shrink-0 border border-white/5">
-                <img src={item.backgroundImageUrl || "/api/placeholder/200/120"} alt={item.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                <img src={item.thumbnailImageUrl || item.backgroundImageUrl || "/api/placeholder/200/120"} alt={item.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
               </div>
               <div className="ml-6 flex-grow">
                 <h4 className="text-lg font-bold italic tracking-tight mb-1 group-hover:text-indigo-400 transition-colors uppercase">{item.title}</h4>

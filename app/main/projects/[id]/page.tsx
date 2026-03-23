@@ -16,6 +16,8 @@ interface ProjectDetail {
     plotId: string;
     plotTitle: string;
     sceneNumber: number;
+    sceneTitle: string | null;
+    thumbnail: string | null;
     images: {
       imageId: string;
       sceneNumber: number;
@@ -33,6 +35,36 @@ interface ProjectDetail {
       createdAt: string;
     };
   }[];
+  assets: {
+    assetId: string;
+    type: "CHARACTER" | "BACKGROUND";
+    imageUrl: string;
+    prompt: string;
+  }[];
+}
+
+function CopyPromptButton({ prompt }: { prompt: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!prompt) return;
+    navigator.clipboard.writeText(prompt);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <button 
+      onClick={handleCopy}
+      className={`text-[9px] font-bold transition-colors px-2.5 py-1 rounded-md border ${
+        copied 
+          ? "text-green-400 bg-green-500/10 border-green-500/20" 
+          : "text-white/20 hover:text-white bg-white/5 border-white/5"
+      }`}
+    >
+      {copied ? "복사 완료 ✓" : "프롬프트 복사"}
+    </button>
+  );
 }
 
 export default function ProjectDetailPage() {
@@ -112,17 +144,21 @@ export default function ProjectDetailPage() {
           </div>
           <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
             {project.scenes.map((scene, idx) => {
-              const thumbnail = scene.images.find(img => img.frameType === "FIRST")?.imageUrl || project.backgroundImageUrl;
+              const thumbnail = scene.thumbnail 
+                               || scene.images?.find(img => img.frameType === "FIRST")?.imageUrl 
+                               || project.backgroundImageUrl 
+                               || "/api/placeholder/400/225";
+              const title = scene.sceneTitle || scene.plotTitle;
               return (
                 <div 
                   key={`scene-${scene.plotId}-${idx}`} 
                   onClick={() => setSelectedSceneIndex(idx)}
-                  className="min-w-[220px] group cursor-pointer"
+                  className="w-[120px] flex-shrink-0 group cursor-pointer"
                 >
                   <div className={`relative aspect-video rounded-2xl overflow-hidden border-2 transition-all duration-300 ${
                     selectedSceneIndex === idx ? 'border-primary-300 ring-4 ring-primary-300/10' : 'border-white/5 grayscale-[40%] group-hover:grayscale-0'
                   }`}>
-                    <img src={thumbnail} className="w-full h-full object-cover" alt={scene.plotTitle} />
+                    <img src={thumbnail} className="w-full h-full object-cover" alt={title} />
                     {scene.video && (
                       <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                          <div className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30">
@@ -130,16 +166,16 @@ export default function ProjectDetailPage() {
                          </div>
                       </div>
                     )}
-                    <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-md text-[10px] px-2 py-1 rounded-lg text-white font-bold">
+                    <div className="absolute bottom-1 right-1 bg-black/60 backdrop-blur-md text-[8px] px-1.5 py-0.5 rounded text-white font-bold">
                       SCENE {scene.sceneNumber}
                     </div>
                   </div>
-                  <div className="mt-3 px-1">
-                    <div className={`text-13 font-bold truncate ${selectedSceneIndex === idx ? 'text-primary-200' : 'text-white/70'}`}>
-                      {scene.plotTitle}
+                  <div className="mt-2 px-1">
+                    <div className={`text-[11px] font-bold truncate ${selectedSceneIndex === idx ? 'text-primary-200' : 'text-white/70'}`}>
+                      {title}
                     </div>
-                    <div className="text-11 text-white/30 truncate font-medium">
-                      {scene.video ? "영상 생성 완료" : "이미지 생성됨"}
+                    <div className="text-[9px] text-white/30 truncate font-medium">
+                      {scene.video ? "영상 완료" : "이미지 완료"}
                     </div>
                   </div>
                 </div>
@@ -160,7 +196,7 @@ export default function ProjectDetailPage() {
             ) : (
               <div className="flex flex-col items-center gap-6">
                  <img 
-                    src={currentScene?.images.find(i => i.frameType === "FIRST")?.imageUrl || project.backgroundImageUrl} 
+                    src={currentScene?.thumbnail || currentScene?.images?.find(i => i.frameType === "FIRST")?.imageUrl || project?.backgroundImageUrl || "/api/placeholder/800/450"} 
                     className="absolute inset-0 w-full h-full object-cover opacity-30 blur-xl pointer-events-none"
                     alt="Background Blur"
                  />
@@ -181,7 +217,7 @@ export default function ProjectDetailPage() {
                     Scene {currentScene?.sceneNumber} Selected
                   </span>
                   <h4 className="text-white/60 font-medium text-14 truncate max-w-[400px]">
-                    {currentScene?.plotTitle}
+                    {currentScene?.sceneTitle || currentScene?.plotTitle}
                   </h4>
                 </div>
                 <div className="flex gap-4">
@@ -201,62 +237,76 @@ export default function ProjectDetailPage() {
       <div className="w-[420px] bg-dark-300 rounded-[40px] border border-white/5 flex flex-col overflow-hidden shadow-2xl">
         <div className="p-7 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
           <div className="flex items-center gap-3 font-bold text-16">
-            <span className="text-primary-300 text-20">🔳</span> 프로젝트 에셋
+            <img src="/images/detail.svg" alt="Detail" className="w-5 h-5" /> 
+            프로젝트 에셋
           </div>
-          <span className="text-10 font-black text-white/20 bg-white/5 px-3 py-1.5 rounded-xl border border-white/5">
-            {currentScene?.images.length || 0} ITEMS
-          </span>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-7 space-y-8 custom-scrollbar">
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-               <div className="text-12 font-black text-white/30 uppercase tracking-[0.2em]">Scene {currentScene?.sceneNumber} Assets</div>
-               <div className="h-[1px] flex-1 bg-white/5 ml-4" />
-            </div>
-            
-            {currentScene?.images.map((img, idx) => (
-              <div key={`asset-${img.imageId}-${idx}`} className="flex gap-5 p-3 rounded-3xl hover:bg-white/[0.04] transition-all duration-300 group border border-transparent hover:border-white/5">
-                <div className="w-[120px] aspect-[3/4] rounded-2xl overflow-hidden bg-black flex-shrink-0 shadow-lg group-hover:shadow-primary-100/10">
-                  <img src={img.imageUrl} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt="Asset" />
-                </div>
-                <div className="flex-1 flex flex-col justify-between py-2 overflow-hidden">
-                  <div className="space-y-1">
-                    <div className="flex justify-between items-center">
-                      <span className="text-[10px] text-primary-200 font-bold tracking-widest uppercase">{img.frameType} FRAME</span>
-                      <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
-                    </div>
-                    <div className="bg-white/5 rounded-xl p-3 mt-3">
-                      <p className="text-[12px] text-white/50 leading-relaxed italic break-words line-clamp-4">
-                        "{img.prompt}"
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex justify-end pt-3">
-                     <button className="text-11 font-bold text-white/20 hover:text-white transition-colors bg-white/5 px-4 py-1.5 rounded-lg border border-white/5">
-                        프롬프트 복사
-                     </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-
-            {currentScene?.video && (
-               <div className="mt-10 p-5 rounded-[28px] bg-primary-100/5 border border-primary-100/10">
-                  <div className="text-12 font-black text-primary-200 uppercase tracking-widest mb-4">Scene Final Video</div>
-                  <div className="aspect-video w-full rounded-2xl overflow-hidden bg-black relative group cursor-pointer border border-white/10 shadow-xl">
-                     <img src={currentScene.images[0]?.imageUrl} className="w-full h-full object-cover opacity-50" alt="Video Placeholder" />
-                     <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-12 h-12 rounded-full bg-primary-300 flex items-center justify-center text-white shadow-xl group-hover:scale-110 transition-transform">
-                          ▶
-                        </div>
-                     </div>
-                  </div>
+           <span className="text-10 font-black text-white/20 bg-white/5 px-3 py-1.5 rounded-xl border border-white/5">
+             {(project.assets?.length || 0) + (currentScene?.images?.length || 0)} ITEMS
+           </span>
+         </div>
+ 
+         <div className="flex-1 overflow-y-auto p-7 space-y-8 custom-scrollbar">
+           {/* Global Project Assets */}
+           {project.assets && project.assets.length > 0 && (
+             <div className="space-y-6">
+               <div className="flex items-center justify-between">
+                  <div className="text-12 font-black text-primary-300 uppercase tracking-[0.2em]">Global Assets</div>
+                  <div className="h-[1px] flex-1 bg-white/5 ml-4" />
                </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+               
+               {project.assets.map((asset, idx) => (
+                 <div key={`global-asset-${asset.assetId}-${idx}`} className="flex gap-5 p-3 rounded-3xl hover:bg-white/[0.04] transition-all duration-300 group border border-transparent hover:border-white/5">
+                   <div className="w-[120px] aspect-square rounded-2xl overflow-hidden bg-black flex-shrink-0 shadow-lg group-hover:shadow-primary-300/10">
+                     <img src={asset.imageUrl || "/api/placeholder/300/300"} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt="Global Asset" />
+                   </div>
+                   <div className="flex-1 flex flex-col justify-center py-2 overflow-hidden">
+                     <div className="flex justify-between items-center bg-white/5 px-2 py-1 rounded-full w-fit mb-2 border border-white/10">
+                         <span className="text-[10px] text-primary-300 font-bold tracking-widest uppercase">{asset.type}</span>
+                     </div>
+                       <p className="text-[12px] text-white/50 leading-relaxed italic break-words line-clamp-3">
+                         "{asset.prompt}"
+                     </p>
+                   </div>
+                   <div className="flex justify-end pt-3">
+                      <CopyPromptButton prompt={asset.prompt} />
+                   </div>
+                 </div>
+               ))}
+             </div>
+           )}
+
+           <div className="space-y-6">
+             <div className="flex items-center justify-between">
+                <div className="text-12 font-black text-white/30 uppercase tracking-[0.2em]">Scene {currentScene?.sceneNumber} Frames</div>
+                <div className="h-[1px] flex-1 bg-white/5 ml-4" />
+             </div>
+             
+             {currentScene?.images.map((img, idx) => (
+               <div key={`asset-${img.imageId}-${idx}`} className="flex gap-5 p-3 rounded-3xl hover:bg-white/[0.04] transition-all duration-300 group border border-transparent hover:border-white/5">
+                 <div className="w-[120px] aspect-[3/4] rounded-2xl overflow-hidden bg-black flex-shrink-0 shadow-lg group-hover:shadow-primary-100/10">
+                   <img src={img.imageUrl || "/api/placeholder/300/400"} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt="Asset" />
+                 </div>
+                 <div className="flex-1 flex flex-col justify-between py-2 overflow-hidden">
+                   <div className="space-y-1">
+                     <div className="flex justify-between items-center">
+                       <span className="text-[10px] text-primary-200 font-bold tracking-widest uppercase">{img.frameType} FRAME</span>
+                       <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
+                     </div>
+                     <div className="bg-white/5 rounded-xl p-3 mt-3">
+                       <p className="text-[12px] text-white/50 leading-relaxed italic break-words line-clamp-4">
+                         "{img.prompt}"
+                       </p>
+                     </div>
+                   </div>
+                   <div className="flex justify-end pt-3">
+                      <CopyPromptButton prompt={img.prompt} />
+                   </div>
+                 </div>
+               </div>
+             ))}
+           </div>
+         </div>
+       </div>
+     </div>
+   );
+ }
