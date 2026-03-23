@@ -115,7 +115,7 @@ export default function ProjectDetailPage() {
               const thumbnail = scene.images.find(img => img.frameType === "FIRST")?.imageUrl || project.backgroundImageUrl;
               return (
                 <div 
-                  key={scene.plotId} 
+                  key={`scene-${scene.plotId}-${idx}`} 
                   onClick={() => setSelectedSceneIndex(idx)}
                   className="min-w-[220px] group cursor-pointer"
                 >
@@ -215,8 +215,8 @@ export default function ProjectDetailPage() {
                <div className="h-[1px] flex-1 bg-white/5 ml-4" />
             </div>
             
-            {currentScene?.images.map((img) => (
-              <div key={img.imageId} className="flex gap-5 p-3 rounded-3xl hover:bg-white/[0.04] transition-all duration-300 group border border-transparent hover:border-white/5">
+            {currentScene?.images.map((img, idx) => (
+              <div key={`asset-${img.imageId}-${idx}`} className="flex gap-5 p-3 rounded-3xl hover:bg-white/[0.04] transition-all duration-300 group border border-transparent hover:border-white/5">
                 <div className="w-[120px] aspect-[3/4] rounded-2xl overflow-hidden bg-black flex-shrink-0 shadow-lg group-hover:shadow-primary-100/10">
                   <img src={img.imageUrl} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt="Asset" />
                 </div>

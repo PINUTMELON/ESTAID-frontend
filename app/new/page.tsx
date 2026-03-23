@@ -9,7 +9,7 @@ import { angles } from '@/app/_constants/scene';
 import StepCard from '@/app/_components/StepCard';
 import CameraAngleSelect from '@/app/_components/CameraAngleSelect';
 import { useNewProject } from '@/app/_hooks/useNewProject';
-import { assetApi } from '@/app/_utils/api';
+import { assetApi, plotApi } from '@/app/_utils/api';
 
 // --- Interfaces ---
 export interface Scene {
@@ -21,6 +21,8 @@ export interface Scene {
   story: string;
   firstFrame: string;
   lastFrame: string;
+  firstFrameImageUrl?: string;
+  lastFrameImageUrl?: string;
   title: string;      // 씬 제목 추가
   imageUrl?: string;
 }
@@ -55,23 +57,10 @@ function NewCreationContent() {
   // --- Step 3 & 4 States ---
   const [storyInput, setStoryInput] = useState('');
   const [sceneCount, setSceneCount] = useState(4);
+  const [isGeneratingScenes, setIsGeneratingScenes] = useState(false);
+  const [hasGeneratedScenes, setHasGeneratedScenes] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState<{ [key: string]: boolean }>({});
 
-  // Initial scenes
-  if (scenes.length === 0 && step >= 3) {
-    setScenes([
-      {
-        id: '01',
-        characterIds: [],
-        backgroundId: '',
-        composition: angles[7],
-        lighting: '어두운 숲 속, 안개가 낀 분위기',
-        story: '갑옷을 입은 기사가 안개 사이로 천천히 걸어 들어옵니다.',
-        firstFrame: '기사의 등장',
-        lastFrame: '안개 속의 대치',
-        title: '첫 만남',
-      }
-    ]);
-  }
 
   // --- Handlers ---
   const handleGoNext = async () => {
@@ -80,7 +69,36 @@ function NewCreationContent() {
     } else if (step === 2) {
       if (backgrounds.length > 0) setStep(3);
     } else if (step === 3) {
-      setStep(4);
+      if (scenes.length === 0) {
+        alert("최소 한 개 이상의 씬이 필요합니다.");
+        return;
+      }
+
+      try {
+        const payload = {
+          scenes: scenes.map((s, idx) => ({
+            sceneNumber: idx + 1,
+            title: s.title || `Scene ${idx + 1}`,
+            composition: mapAngleToComposition(s.composition.id),
+            background: backgrounds.find(b => b.id === s.backgroundId)?.name || '',
+            backgroundDetail: backgrounds.find(b => b.id === s.backgroundId)?.description || '',
+            lighting: s.lighting,
+            majorStory: s.story,
+            firstFramePrompt: s.firstFrame,
+            firstFrameImageUrl: s.firstFrameImageUrl,
+            lastFramePrompt: s.lastFrame,
+            lastFrameImageUrl: s.lastFrameImageUrl
+          }))
+        };
+
+        const response = await plotApi.updateScenes(projectId!, payload);
+        if (response.success) {
+          router.push(`/generate?projectId=${projectId}`);
+        }
+      } catch (error) {
+        console.error("Failed to save scenes:", error);
+        alert("씬 저장에 실패했습니다.");
+      }
     } else if (step === 4) {
       router.push(`/main/projects/${projectId}`);
     }
@@ -90,8 +108,7 @@ function NewCreationContent() {
     if (step > 1) setStep(step - 1);
   };
 
-  const completedCount = [(step === 1 ? charName.trim() : bgName.trim()) ? true : null, ratio, quality, uploadedImage].filter(Boolean).length;
-  const isReadyToGenerate = completedCount === 4;
+  const isReadyToGenerate = (step === 1 ? charName.trim() : bgName.trim()) && ratio && quality && uploadedImage;
 
   const handleGenerate = async () => {
     if (!isReadyToGenerate || isGenerating || !projectId) return;
@@ -122,8 +139,10 @@ function NewCreationContent() {
         formData.append('quality', mappedQuality);
       }
 
-      // 이미지는 마지막에 추가 (서버에 따라 순서가 중요할 수 있음)
-      formData.append('referenceImage', selectedFile);
+      // 이미지는 있는 경우에만 추가
+      if (selectedFile) {
+        formData.append('referenceImage', selectedFile);
+      }
 
       const response = await assetApi.create(projectId, assetType, formData);
       
@@ -151,6 +170,135 @@ function NewCreationContent() {
       alert(error instanceof Error ? error.message : "자산 생성에 실패했습니다.");
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleRemoveAsset = async (id: string) => {
+    if (!projectId) return;
+    const assetType = step === 1 ? 'characters' : 'backgrounds';
+    if (!confirm('정말로 이 자산을 삭제하시겠습니까?')) return;
+
+    try {
+      const res = await assetApi.delete(projectId, assetType, id);
+      if (res.success) {
+        if (step === 1) removeCharacter(id);
+        else removeBackground(id);
+      }
+    } catch (error) {
+      console.error("Asset deletion failed:", error);
+      alert("자산 삭제에 실패했습니다.");
+    }
+  };
+
+  const handleGenerateScenes = async () => {
+    if (!storyInput.trim() || !projectId || isGeneratingScenes) return;
+    setIsGeneratingScenes(true);
+    try {
+      const response = await plotApi.generate({
+        projectId,
+        storyDescription: storyInput.trim(),
+        sceneCount,
+        ratio: ratio || '16:9'
+      });
+
+      if (response.success && response.data.scenes) {
+        const newScenes: Scene[] = response.data.scenes.map((s) => {
+          // 배경 이름으로 기존 배경 찾기 시도
+          const matchedBg = backgrounds.find(b => b.name === s.background);
+          
+          return {
+            id: s.sceneNumber.toString().padStart(2, '0'),
+            characterIds: [],
+            backgroundId: matchedBg?.id || '',
+            composition: mapCompositionToAngle(s.composition),
+            lighting: s.lighting,
+            story: s.majorStory,
+            firstFrame: s.firstFramePrompt,
+            lastFrame: s.lastFramePrompt,
+            firstFrameImageUrl: s.firstFrameImageUrl || undefined,
+            lastFrameImageUrl: s.lastFrameImageUrl || undefined,
+            title: s.title,
+          };
+        });
+        setScenes(newScenes);
+        setHasGeneratedScenes(true);
+      }
+    } catch (error) {
+      console.error("Storyboard generation failed:", error);
+      const errorMsg = (error as any)?.message || "";
+      if (errorMsg.includes("400")) {
+        alert("이미 이 프로젝트에 생성된 플롯이 있습니다.");
+      } else {
+        alert("AI 스토리보드 생성에 실패했습니다.");
+      }
+    } finally {
+      setIsGeneratingScenes(false);
+    }
+  };
+
+  const mapCompositionToAngle = (comp: string) => {
+    const mapping: Record<string, string> = {
+      'EXTREME_CLOSEUP': 'extreme',
+      'HIGH_ANGLE': 'high',
+      'LOW_ANGLE': 'low',
+      'MEDIUM_SHOT': 'medium',
+      'OVER_THE_SHOULDER': 'shoulder',
+      'TWO_SHOT': 'two',
+      'WIDE_SHOT': 'wide',
+      'BIRD_EYE_VIEW': 'birdeyeview',
+      'CLOSEUP': 'closeup',
+      'DUTCH_ANGLE': 'dutch'
+    };
+    const angleId = mapping[comp] || 'wide';
+    return angles.find(a => a.id === angleId) || angles[7]; // fallback to wide shot
+  };
+
+  const mapAngleToComposition = (angleId: string) => {
+    const reverseMapping: Record<string, string> = {
+      'extreme': 'EXTREME_CLOSEUP',
+      'high': 'HIGH_ANGLE',
+      'low': 'LOW_ANGLE',
+      'medium': 'MEDIUM_SHOT',
+      'shoulder': 'OVER_THE_SHOULDER',
+      'two': 'TWO_SHOT',
+      'wide': 'WIDE_SHOT',
+      'birdeyeview': 'BIRD_EYE_VIEW',
+      'closeup': 'CLOSEUP',
+      'dutch': 'DUTCH_ANGLE'
+    };
+    return reverseMapping[angleId] || 'WIDE_SHOT';
+  };
+
+  const handleRegenerateFrame = async (idx: number, firstOrLast: "FIRST" | "LAST") => {
+    if (!projectId) return;
+    const scene = scenes[idx];
+    const sceneNumber = idx + 1; // 1부터 시작 (id가 '01', '02' 형식이므로 idx+1 권장)
+    const prompt = firstOrLast === "FIRST" ? scene.firstFrame : scene.lastFrame;
+
+    // 로딩 상태 구분 (idx-TYPE)
+    const stateKey = `${idx}-${firstOrLast}`;
+    setIsRegenerating(prev => ({ ...prev, [stateKey]: true }));
+
+    try {
+      const response = await plotApi.regenerateFrame({
+        projectId,
+        sceneNumber,
+        firstOrLast,
+        prompt
+      });
+
+      if (response.success && response.data.imageUrl) {
+        if (firstOrLast === "FIRST") {
+          updateSceneField(idx, { firstFrameImageUrl: response.data.imageUrl });
+        } else {
+          updateSceneField(idx, { lastFrameImageUrl: response.data.imageUrl });
+        }
+      }
+    } catch (error) {
+      console.error("Frame regeneration failed:", error);
+      alert("이미지 생성에 실패했습니다.");
+    } finally {
+      setIsRegenerating(prev => ({ ...prev, [stateKey]: false }));
     }
   };
 
@@ -216,7 +364,7 @@ function NewCreationContent() {
                     />
                   </section>
                   <section className="space-y-3">
-                    <h3 className="text-[13px] font-black text-white/80 uppercase tracking-widest">참고 이미지</h3>
+                    <h3 className="text-[13px] font-black text-white/80 uppercase tracking-widest flex items-center gap-1.5">참고 이미지<span className="text-primary-100">*</span></h3>
                     <div
                       onClick={() => fileInputRef.current?.click()}
                       className={`relative flex flex-col items-center justify-center aspect-square h-40 border-2 border-dashed rounded-2xl transition-all cursor-pointer group overflow-hidden ${uploadedImage ? 'border-primary-100/50 bg-black/40' : 'border-white/5 bg-[#1a1a1e] hover:border-primary-100/40'
@@ -265,7 +413,14 @@ function NewCreationContent() {
                 <div className="grid grid-cols-2 gap-3">
                   {isGenerating && <div className="relative aspect-square rounded-2xl border-2 bg-white/5 border-dashed border-white/10 animate-pulse flex items-center justify-center"><div className="w-5 h-5 border-2 border-primary-100 border-t-transparent rounded-full animate-spin" /></div>}
                   {(step === 1 ? characters : backgrounds).map((item) => (
-                    <div key={item.id} className="group relative aspect-square rounded-2xl overflow-hidden bg-[#111113] border border-white/5 ring-1 ring-white/5 hover:ring-primary-100/30 transition-all"><Image src={item.imageUrl} alt={item.name} fill className="object-cover opacity-80 group-hover:opacity-100 transition-opacity" /><div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" /><div className="absolute bottom-3 left-3 right-3 opacity-0 group-hover:opacity-100 transition-all translate-y-1 group-hover:translate-y-0 text-[10px] font-black"><p className="truncate mb-1">{item.name}</p><button onClick={() => step === 1 ? removeCharacter(item.id) : removeBackground(item.id)} className="text-[8px] text-red-400/60 hover:text-red-400 uppercase">Remove</button></div></div>
+                    <div key={item.id} className="group relative aspect-square rounded-2xl overflow-hidden bg-[#111113] border border-white/5 ring-1 ring-white/5 hover:ring-primary-100/30 transition-all">
+                      <Image src={item.imageUrl} alt={item.name} fill className="object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <div className="absolute bottom-3 left-3 right-3 opacity-0 group-hover:opacity-100 transition-all translate-y-1 group-hover:translate-y-0 text-[10px] font-black">
+                        <p className="truncate mb-1">{item.name}</p>
+                        <button onClick={() => handleRemoveAsset(item.id)} className="text-[8px] text-red-400/60 hover:text-red-400 uppercase">Remove</button>
+                      </div>
+                    </div>
                   ))}
                 </div>
                 {!(isGenerating || (step === 1 ? characters : backgrounds).length > 0) && <div className="h-full flex flex-col items-center justify-center text-center opacity-20 italic p-10 font-bold tracking-widest text-[10px]">생성된 자산이 없습니다.</div>}
@@ -280,53 +435,69 @@ function NewCreationContent() {
             <PageHeader title="씬 만들기" />
             <div className="flex-1 overflow-y-auto custom-scrollbar p-10">
               <section className="max-w-7xl">
-                <div className="border border-white/5 rounded-xl p-6 grid grid-cols-12 gap-8 mb-8">
-                  <div className="col-span-6 space-y-2 flex flex-col">
-                    <label className="text-sm font-bold text-gray-400">스토리 설명</label>
-                    <textarea
-                      value={storyInput}
-                      onChange={(e) => setStoryInput(e.target.value)}
-                      placeholder="스토리 입력..."
-                      className="w-full h-32 bg-[#1a1a1e] border border-border-100 rounded-xl p-3 px-4 text-sm resize-none focus:outline-none focus:border-primary-100/50 transition-colors"
-                    />
-                  </div>
-                  <div className="col-span-6 flex flex-col justify-between items-end">
-                    <div className="w-full space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="text-sm font-bold text-gray-400">씬 갯수</label>
-                          <input
-                            type="number"
-                            min="1" max="12"
-                            value={sceneCount}
-                            onChange={(e) => setSceneCount(Number(e.target.value))}
-                            className="mt-2 w-full bg-[#1a1a1e] border border-border-100 rounded-xl p-3 text-sm focus:outline-none focus:border-primary-100/50 transition-colors"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-sm font-bold text-gray-400">비율</label>
-                          <div className="mt-2 flex gap-1 overflow-x-auto custom-scrollbar pb-1">
-                            {ratios.map((r) => (
-                              <button
-                                key={r}
-                                onClick={() => setRatio(r)}
-                                className={`px-2 py-1.5 rounded-lg text-9 font-bold border transition-all shrink-0 ${ratio === r ? 'border-primary-100 bg-primary-100/10 text-primary-100' : 'border-white/5 text-white/20 hover:text-white/40'}`}
-                              >
-                                {r}
-                              </button>
-                            ))}
+                {!hasGeneratedScenes && (
+                  <div className="border border-white/5 rounded-xl p-6 grid grid-cols-12 gap-8 mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
+                    <div className="col-span-6 space-y-2 flex flex-col">
+                      <label className="text-sm font-bold text-gray-400">스토리 설명</label>
+                      <textarea
+                        value={storyInput}
+                        onChange={(e) => setStoryInput(e.target.value)}
+                        placeholder="스토리 입력..."
+                        className="w-full h-32 bg-[#1a1a1e] border border-border-100 rounded-xl p-3 px-4 text-sm resize-none focus:outline-none focus:border-primary-100/50 transition-colors"
+                      />
+                    </div>
+                    <div className="col-span-6 flex flex-col justify-between items-end">
+                      <div className="w-full space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-sm font-bold text-gray-400">씬 갯수</label>
+                            <input
+                              type="number"
+                              min="1" max="12"
+                              value={sceneCount}
+                              onChange={(e) => setSceneCount(Number(e.target.value))}
+                              className="mt-2 w-full bg-[#1a1a1e] border border-border-100 rounded-xl p-3 text-sm focus:outline-none focus:border-primary-100/50 transition-colors"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-bold text-gray-400">비율</label>
+                            <div className="mt-2 flex gap-1 overflow-x-auto custom-scrollbar pb-1">
+                              {ratios.map((r) => (
+                                <button
+                                  key={r}
+                                  onClick={() => setRatio(r)}
+                                  className={`px-2 py-1.5 rounded-lg text-9 font-bold border transition-all shrink-0 ${ratio === r ? 'border-primary-100 bg-primary-100/10 text-primary-100' : 'border-white/5 text-white/20 hover:text-white/40'}`}
+                                >
+                                  {r}
+                                </button>
+                              ))}
+                            </div>
                           </div>
                         </div>
+                        <button 
+                          onClick={handleGenerateScenes}
+                          disabled={isGeneratingScenes || !storyInput.trim()}
+                          className={`w-full py-4 bg-primary-100 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary-300/10 active:scale-95 transition-all ${isGeneratingScenes || !storyInput.trim() ? 'opacity-40 cursor-not-allowed' : ''}`}
+                        >
+                          {isGeneratingScenes ? (
+                            <>
+                              <div className="w-5 h-5 border-3 border-white/20 border-t-white rounded-full animate-spin" />
+                              <span>AI 씬 만드는 중...</span>
+                            </>
+                          ) : (
+                            <>🪄 AI 씬 생성</>
+                          )}
+                        </button>
                       </div>
-                      <button className="w-full py-4 bg-primary-100 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary-300/10 active:scale-95 transition-all">🪄 AI 씬 생성</button>
                     </div>
                   </div>
-                </div>
-                <div className="bg-white/[0.02] rounded-2xl overflow-hidden border border-white/5">
-                  <div className="overflow-x-auto custom-scrollbar">
-                    <table className="w-full text-center border-collapse min-w-[1200px]">
-                      <thead><tr className="bg-white/[0.03] text-[11px] text-white/40 font-bold border-b border-white/5 uppercase tracking-widest"><th className="p-4 w-48">제목</th><th className="p-4 w-44">등장인물</th><th className="p-4 w-40">구도</th><th className="p-4 w-48">배경</th><th className="p-4 w-48">조명</th><th className="p-4 min-w-[300px]">주요 스토리</th><th className="p-4 w-48">첫 프레임</th><th className="p-4 w-48">마지막 프레임</th></tr></thead>
-                      <tbody className="divide-y divide-white/5">
+                )}
+                {hasGeneratedScenes && (
+                  <div className="bg-white/[0.02] rounded-2xl overflow-hidden border border-white/5 animate-in fade-in zoom-in-95 duration-700">
+                    <div className="overflow-x-auto custom-scrollbar">
+                      <table className="w-full text-center border-collapse min-w-[1200px]">
+                        <thead><tr className="bg-white/[0.03] text-[11px] text-white/40 font-bold border-b border-white/5 uppercase tracking-widest"><th className="p-4 w-48">제목</th><th className="p-4 w-44">등장인물</th><th className="p-4 w-40">구도</th><th className="p-4 w-48">배경</th><th className="p-4 w-48">조명</th><th className="p-4 min-w-[300px]">주요 스토리</th><th className="p-4 w-48">첫 프레임</th><th className="p-4 w-48">마지막 프레임</th></tr></thead>
+                        <tbody className="divide-y divide-white/5">
                         {scenes.map((scene, idx) => (
                           <tr key={idx} className="hover:bg-white/[0.01]">
                             <td className="p-4 align-top text-left space-y-2 pt-6">
@@ -384,8 +555,23 @@ function NewCreationContent() {
                             <td className="p-2 align-top pt-6">
                               <div className="space-y-2">
                                 <div className="aspect-video relative rounded-lg overflow-hidden bg-white/5 border border-white/5 group/img">
-                                  {scene.imageUrl ? <Image src={scene.imageUrl} alt="preview" fill className="object-cover" /> : <div className="absolute inset-0 flex items-center justify-center text-[10px] text-white/10 italic">No Image</div>}
-                                  <button className="absolute inset-0 bg-black/60 backdrop-blur-sm opacity-0 group-hover/img:opacity-100 transition-all flex items-center justify-center text-[10px] font-bold gap-1 text-primary-100 uppercase">🪄 재생성</button>
+                                  {scene.firstFrameImageUrl || scene.imageUrl ? (
+                                    <Image src={scene.firstFrameImageUrl || scene.imageUrl || ""} alt="preview" fill className="object-cover" />
+                                  ) : (
+                                    <div className="absolute inset-0 flex items-center justify-center text-[10px] text-white/10 italic">No Image</div>
+                                  )}
+
+                                  <button
+                                    onClick={() => handleRegenerateFrame(idx, "FIRST")}
+                                    disabled={isRegenerating[`${idx}-FIRST`]}
+                                    className="absolute inset-0 bg-black/60 backdrop-blur-sm opacity-0 group-hover/img:opacity-100 transition-all flex flex-col items-center justify-center text-[10px] font-bold gap-2 text-primary-100 uppercase"
+                                  >
+                                    {isRegenerating[`${idx}-FIRST`] ? (
+                                      <div className="w-4 h-4 border-2 border-primary-100 border-t-transparent rounded-full animate-spin" />
+                                    ) : (
+                                      <>🪄 재생성</>
+                                    )}
+                                  </button>
                                 </div>
                                 <textarea
                                   value={scene.firstFrame}
@@ -397,8 +583,23 @@ function NewCreationContent() {
                             <td className="p-2 align-top pt-6">
                               <div className="space-y-2">
                                 <div className="aspect-video relative rounded-lg overflow-hidden bg-white/5 border border-white/5 group/img">
-                                  {scene.imageUrl ? <Image src={scene.imageUrl} alt="preview" fill className="object-cover scale-x-[-1]" /> : <div className="absolute inset-0 flex items-center justify-center text-[10px] text-white/10 italic">No Image</div>}
-                                  <button className="absolute inset-0 bg-black/60 backdrop-blur-sm opacity-0 group-hover/img:opacity-100 transition-all flex items-center justify-center text-[10px] font-bold gap-1 text-primary-100 uppercase">🪄 재생성</button>
+                                  {scene.lastFrameImageUrl || scene.imageUrl ? (
+                                    <Image src={scene.lastFrameImageUrl || scene.imageUrl || ""} alt="preview" fill className="object-cover scale-x-[-1]" />
+                                  ) : (
+                                    <div className="absolute inset-0 flex items-center justify-center text-[10px] text-white/10 italic">No Image</div>
+                                  )}
+
+                                  <button
+                                    onClick={() => handleRegenerateFrame(idx, "LAST")}
+                                    disabled={isRegenerating[`${idx}-LAST`]}
+                                    className="absolute inset-0 bg-black/60 backdrop-blur-sm opacity-0 group-hover/img:opacity-100 transition-all flex flex-col items-center justify-center text-[10px] font-bold gap-2 text-primary-100 uppercase"
+                                  >
+                                    {isRegenerating[`${idx}-LAST`] ? (
+                                      <div className="w-4 h-4 border-2 border-primary-100 border-t-transparent rounded-full animate-spin" />
+                                    ) : (
+                                      <>🪄 재생성</>
+                                    )}
+                                  </button>
                                 </div>
                                 <textarea
                                   value={scene.lastFrame}
@@ -413,6 +614,7 @@ function NewCreationContent() {
                     </table>
                   </div>
                 </div>
+                )}
               </section>
             </div>
           </div>

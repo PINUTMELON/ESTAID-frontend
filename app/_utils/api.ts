@@ -189,6 +189,18 @@ export const projectApi = {
     request<null>(`/projects/${projectId}`, {
       method: "DELETE",
     }),
+
+  /** 프로젝트 평점 반영 */
+  rate: (projectId: string, rating: number) =>
+    request<{
+      projectId: string;
+      averageRating: number;
+      ratingCount: number;
+      ratingSum: number;
+    }>(`/api/projects/${projectId}/rating`, {
+      method: "POST",
+      body: JSON.stringify({ rating }),
+    }),
 };
 
 // ────────────────────────────────────────────────────────────
@@ -210,7 +222,72 @@ export const plotApi = {
 
   /** 플롯 조회 */
   get: (plotId: string) => request(`/plots/${plotId}`),
+
+  /** AI 스토리보드 자동 생성 */
+  generate: (body: {
+    projectId: string;
+    storyDescription: string;
+    sceneCount: number;
+    ratio?: string;
+  }) =>
+    request<{
+      plotId: string;
+      title: string;
+      scenes: {
+        sceneNumber: number;
+        title: string;
+        composition: string;
+        background: string;
+        backgroundDetail: string;
+        lighting: string;
+        majorStory: string;
+        firstFramePrompt: string;
+        firstFrameImageUrl: string | null;
+        lastFramePrompt: string;
+        lastFrameImageUrl: string | null;
+      }[];
+    }>("/api/projects/plots/generate", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  /** 씬 프레임 이미지 재생성 */
+  regenerateFrame: (body: {
+    projectId: string;
+    sceneNumber: number;
+    firstOrLast: "FIRST" | "LAST";
+    prompt: string;
+  }) =>
+    request<{ imageUrl: string }>("/api/projects/plots/frames/regenerate", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  /** 전체 씬 배치 저장 */
+  updateScenes: (
+    projectId: string,
+    body: {
+      scenes: {
+        sceneNumber: number;
+        title: string;
+        composition: string;
+        background: string;
+        backgroundDetail?: string;
+        lighting: string;
+        majorStory: string;
+        firstFramePrompt: string;
+        firstFrameImageUrl?: string;
+        lastFramePrompt: string;
+        lastFrameImageUrl?: string;
+      }[];
+    }
+  ) =>
+    request<null>(`/api/projects/${projectId}/plots/scenes`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
 };
+
 
 // ────────────────────────────────────────────────────────────
 // 이미지 API
@@ -242,16 +319,26 @@ export const imageApi = {
 // ────────────────────────────────────────────────────────────
 
 export const videoApi = {
-  /** 씬 단위 영상 생성 */
+  /** 영상 생성 (방식 A: projectId 기반) */
   generate: (body: {
-    plotId: string;
+    projectId: string;
     sceneNumber: number;
-    firstImageId: string;
-    lastImageId: string;
-    videoPrompt: string;
-    duration?: number;
+    prompt: string;
   }) =>
-    request("/videos/generate", {
+    request<{
+      videoId: string;
+      plotId: string;
+      sceneNumber: number;
+      videoType: "SCENE";
+      videoPrompt: string;
+      firstImageId: string;
+      lastImageId: string;
+      videoUrl: string | null;
+      thumbnail: string;
+      duration: number | null;
+      status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+      createdAt: string;
+    }>("/api/videos/generate", {
       method: "POST",
       body: JSON.stringify(body),
     }),
@@ -263,18 +350,38 @@ export const videoApi = {
       body: JSON.stringify(body),
     }),
 
-  /** 영상 조회 */
-  get: (videoId: string) => request(`/videos/${videoId}`),
-
-  /** 단일 영상 정보 조회 (명세 맞춤) */
+  /** 영상 조회 및 상태 확인 */
   getOne: (videoId: string) =>
     request<{
       videoId: string;
-      videoUrl: string;
-    }>(`/video/${videoId}`),
+      plotId: string;
+      sceneNumber: number;
+      videoType: "SCENE";
+      videoPrompt: string;
+      firstImageId: string;
+      lastImageId: string;
+      videoUrl: string | null;
+      thumbnail: string;
+      duration: number | null;
+      status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+      createdAt: string;
+    }>(`/api/videos/${videoId}`),
 
   /** 플롯 내 씬 영상 전체 조회 */
   getByPlot: (plotId: string) => request(`/videos/plot/${plotId}`),
+
+  /** 영상 생성 페이지 초기 정보 조회 */
+  getVideoInfo: (projectId: string) =>
+    request<{
+      projectId: string;
+      scenes: {
+        sceneNumber: number;
+        title: string;
+        firstFrameUrl: string;
+        lastFrameUrl: string;
+        combinedPrompt: string;
+      }[];
+    }>(`/projects/${projectId}/video-info`),
 };
 
 // ────────────────────────────────────────────────────────────
@@ -324,4 +431,35 @@ export const assetApi = {
         "Content-Type": "", // multipart 자동 처리 유도
       },
     }),
+
+  /** 자산 개별 삭제 */
+  delete: (
+    projectId: string,
+    assetType: "characters" | "backgrounds",
+    assetId: string
+  ) =>
+    request<null>(`/api/projects/${projectId}/${assetType}/${assetId}`, {
+      method: "DELETE",
+    }),
+};
+
+// ────────────────────────────────────────────────────────────
+// 랭킹 API
+// ────────────────────────────────────────────────────────────
+
+export const rankingApi = {
+  /** 랭킹 목록 조회 */
+  get: () =>
+    request<
+      {
+        rank: number;
+        projectId: string;
+        title: string;
+        ownerUsername: string;
+        backgroundImageUrl: string | null;
+        averageRating: number;
+        ratingCount: number;
+        createdAt: string;
+      }[]
+    >("/projects/ranking"),
 };

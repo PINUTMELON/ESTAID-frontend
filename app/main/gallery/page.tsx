@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { galleryApi, videoApi } from "../../_utils/api";
+import { galleryApi, videoApi, projectApi } from "../../_utils/api";
 import Image from "next/image";
+import { Star } from "lucide-react";
 
 interface GalleryItem {
   projectId: string;
@@ -23,6 +24,9 @@ export default function GalleryPage() {
   const [selectedItem, setSelectedItem] = useState<GalleryItem | null>(null);
   const [videoLoading, setVideoLoading] = useState(false);
   const [dynamicUrl, setDynamicUrl] = useState<string | null>(null);
+  const [ratingHover, setRatingHover] = useState(0);
+  const [isRating, setIsRating] = useState(false);
+  const [ratingRes, setRatingRes] = useState<{ averageRating: number; ratingCount: number } | null>(null);
 
   useEffect(() => {
     const fetchGallery = async () => {
@@ -44,6 +48,7 @@ export default function GalleryPage() {
     setSelectedItem(item);
     setVideoLoading(true);
     setDynamicUrl(null);
+    setRatingRes(null);
     try {
       const res = await videoApi.getOne(item.videoId);
       if (res.success) {
@@ -53,6 +58,26 @@ export default function GalleryPage() {
       console.error("Failed to fetch video details:", error);
     } finally {
       setVideoLoading(false);
+    }
+  };
+
+  const handleRate = async (rating: number) => {
+    if (!selectedItem || isRating) return;
+    setIsRating(true);
+    try {
+      const res = await projectApi.rate(selectedItem.projectId, rating);
+      if (res.success) {
+        setRatingRes({
+          averageRating: res.data.averageRating,
+          ratingCount: res.data.ratingCount
+        });
+        alert("평점이 반영되었습니다.");
+      }
+    } catch (error) {
+      console.error("Failed to rate project:", error);
+      alert("평점 반영 중 오류가 발생했습니다.");
+    } finally {
+      setIsRating(false);
     }
   };
 
@@ -144,7 +169,7 @@ export default function GalleryPage() {
             </div>
 
             {/* Right: Info Panels */}
-            <div className="w-full md:w-[360px] p-8 flex flex-col justify-between border-l border-white/5 bg-dark-200/50">
+            <div className="w-full md:w-[360px] p-8 flex flex-col justify-between border-l border-white/5 bg-dark-200/50 overflow-y-auto custom-scrollbar">
               <div>
                 <span className="text-primary-200 text-xs font-bold tracking-widest uppercase mb-4 block">
                   Gallery Feature
@@ -176,16 +201,48 @@ export default function GalleryPage() {
                       <span className="text-13 text-white/80">{selectedItem.sceneNumber}</span>
                     </div>
                   </div>
-                </div>
-              </div>
 
-              <div className="pt-8 border-t border-white/5">
-                <button 
-                  onClick={() => setSelectedItem(null)}
-                  className="w-full py-4 bg-white/10 hover:bg-white/20 text-white font-bold rounded-2xl transition-all active:scale-95"
-                >
-                  Close Player
-                </button>
+                  {/* Rating Section */}
+                  <div className="pt-6 border-t border-white/5 space-y-6">
+                    <div className="flex justify-between items-center">
+                      <h4 className="text-12 text-white/30 font-bold uppercase tracking-widest">Rate this Project</h4>
+                    </div>
+                    <div className="flex flex-col items-center gap-6 bg-white/[0.02] p-6 rounded-3xl border border-white/5">
+                      <div className="flex items-center gap-3">
+                         {[1, 2, 3, 4, 5].map((star) => (
+                           <button
+                             key={star}
+                             disabled={isRating}
+                             onMouseEnter={() => setRatingHover(star)}
+                             onMouseLeave={() => setRatingHover(0)}
+                             onClick={() => handleRate(star)}
+                             className="transition-transform active:scale-90 disabled:opacity-50"
+                           >
+                             <Star 
+                               className={`w-8 h-8 transition-colors ${
+                                 (ratingHover || 0) >= star 
+                                 ? "text-primary-100 fill-primary-100" 
+                                 : "text-white/10"
+                               }`} 
+                             />
+                           </button>
+                         ))}
+                      </div>
+                      
+                      {ratingRes && (
+                        <div className="flex flex-col items-center gap-1 animate-in fade-in slide-in-from-top-2 duration-500">
+                           <div className="flex items-center gap-2">
+                             <Star className="w-4 h-4 text-primary-100 fill-primary-100" />
+                             <span className="text-28 font-black text-white">{ratingRes.averageRating.toFixed(1)}</span>
+                           </div>
+                           <span className="text-11 text-white/20 font-bold uppercase tracking-widest">
+                             평균 평점 ({ratingRes.ratingCount}명 참여)
+                           </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

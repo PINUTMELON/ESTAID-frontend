@@ -1,153 +1,280 @@
 "use client";
 
-import React, { useState } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import {
     Play,
-    Volume2,
-    Maximize2,
-    ArrowDown,
     Video,
-    Layers
+    ChevronRight,
+    Loader2,
+    RefreshCw,
+    AlertCircle
 } from 'lucide-react';
+import { videoApi } from '@/app/_utils/api';
 
-export default function GeneratePage() {
-    const [progress, setProgress] = useState(65);
+interface SceneInfo {
+    sceneNumber: number;
+    title: string;
+    firstFrameUrl: string;
+    lastFrameUrl: string;
+    combinedPrompt: string;
+    videoUrl?: string | null;
+}
+
+interface ProjectVideoInfo {
+    projectId: string;
+    scenes: SceneInfo[];
+}
+
+function GenerateContent() {
+    const searchParams = useSearchParams();
+    const projectId = searchParams.get('projectId');
+    
+    const [info, setInfo] = useState<ProjectVideoInfo | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [selectedIdx, setSelectedIdx] = useState(0);
+    const [isGenerating, setIsGenerating] = useState<Record<number, boolean>>({});
+    const [progress, setProgress] = useState<Record<number, number>>({});
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        const fetchInfo = async () => {
+            if (!projectId) {
+                setLoading(false);
+                return;
+            }
+            try {
+                const res = await videoApi.getVideoInfo(projectId);
+                if (res.success) {
+                    setInfo(res.data);
+                } else {
+                    setError(res.message || "Failed to load project data.");
+                }
+            } catch (err) {
+                console.error("Failed to fetch video info:", err);
+                setError("Server connection error.");
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchInfo();
+    }, [projectId]);
+
+    const handleGenerateVideo = async (sceneNumber: number) => {
+        if (!projectId || !info) return;
+        const currentScene = info.scenes.find(s => s.sceneNumber === sceneNumber);
+        if (!currentScene) return;
+
+        setIsGenerating(prev => ({ ...prev, [sceneNumber]: true }));
+        setProgress(prev => ({ ...prev, [sceneNumber]: 0 }));
+        
+        const interval = setInterval(() => {
+            setProgress(prev => {
+                const cur = prev[sceneNumber] || 0;
+                if (cur >= 95) return prev;
+                return { ...prev, [sceneNumber]: cur + Math.floor(Math.random() * 3) + 1 };
+            });
+        }, 800);
+
+        try {
+            const response = await videoApi.generate({
+                projectId,
+                sceneNumber,
+                prompt: currentScene.combinedPrompt
+            });
+
+            if (response.success && response.data.videoId) {
+                const videoId = response.data.videoId;
+                const pollInterval = setInterval(async () => {
+                    try {
+                        const statusRes = await videoApi.getOne(videoId);
+                        if (statusRes.success) {
+                            const { status, videoUrl } = statusRes.data;
+                            if (status === "COMPLETED") {
+                                clearInterval(pollInterval);
+                                clearInterval(interval);
+                                setProgress(prev => ({ ...prev, [sceneNumber]: 100 }));
+                                setInfo(prev => {
+                                    if (!prev) return prev;
+                                    return {
+                                        ...prev,
+                                        scenes: prev.scenes.map(s => 
+                                            s.sceneNumber === sceneNumber ? { ...s, videoUrl } : s
+                                        )
+                                    };
+                                });
+                                setIsGenerating(prev => ({ ...prev, [sceneNumber]: false }));
+                            } else if (status === "FAILED") {
+                                clearInterval(pollInterval);
+                                clearInterval(interval);
+                                alert(`[DEBUG] 영상 생성 상태 FAILED:\n${JSON.stringify(statusRes, null, 2)}`);
+                                setIsGenerating(prev => ({ ...prev, [sceneNumber]: false }));
+                            }
+                        } else {
+                            // API success: false 인 경우 (메시지가 있다면 출력)
+                            clearInterval(pollInterval);
+                            clearInterval(interval);
+                            alert(`상태 조회 실패: ${statusRes.message || "서버 통신 오류"}`);
+                            setIsGenerating(prev => ({ ...prev, [sceneNumber]: false }));
+                        }
+                    } catch (err: any) { 
+                        console.error("Polling error:", err);
+                        // 에러 로그만 남기고 폴링은 계속 시도할 수 있음 (일시적 단절 대비)
+                    }
+                }, 3000);
+            } else {
+                alert(`요청 실패: ${response.message || "서버 응답이 올바르지 않습니다."}`);
+                clearInterval(interval);
+                setIsGenerating(prev => ({ ...prev, [sceneNumber]: false }));
+            }
+        } catch (err: any) {
+            console.error("Generate error:", err);
+            alert(`시스템 오류: ${err.message || "서버와 통신할 수 없습니다."}`);
+            clearInterval(interval);
+            setIsGenerating(prev => ({ ...prev, [sceneNumber]: false }));
+        }
+    };
+
+    const handlePromptChange = (val: string) => {
+        if (!info) return;
+        setInfo(prev => {
+            if (!prev) return prev;
+            const newScenes = [...prev.scenes];
+            newScenes[selectedIdx] = { ...newScenes[selectedIdx], combinedPrompt: val };
+            return { ...prev, scenes: newScenes };
+        });
+    };
+
+    if (loading) return (
+        <div className="h-screen w-full bg-[#0B0B0C] flex flex-col items-center justify-center gap-4 text-white/40">
+            <Loader2 className="w-8 h-8 animate-spin" />
+            <span className="text-[10px] font-black tracking-widest uppercase">Initializing Canvas...</span>
+        </div>
+    );
+
+    if (error || !info) return (
+        <div className="h-screen w-full bg-[#0B0B0C] flex flex-col items-center justify-center gap-4 text-white/20">
+            <AlertCircle className="w-12 h-12" />
+            <p className="text-xs uppercase font-black tracking-widest">{error || "Project Not Found"}</p>
+        </div>
+    );
+
+    const currentScene = info.scenes[selectedIdx];
+    const isGeneratingCurrent = isGenerating[currentScene.sceneNumber];
+    const currentProgress = progress[currentScene.sceneNumber] || 0;
 
     return (
-        <div className="flex h-screen bg-[#121218] text-gray-300 font-sans">
+        <div className="flex h-screen bg-[#080808] text-white font-sans overflow-hidden">
             {/* Sidebar */}
-            <aside className="w-64 border-r border-gray-800 flex flex-col p-6 space-y-10">
+            <aside className="w-[260px] border-r border-white/5 flex flex-col p-6 space-y-8 bg-[#0B0B0C]">
                 <div className="flex items-center justify-center w-full py-2">
                     <Link href="/main/projects">
-                        <Image src="/images/logo.png" width={125} height={30} alt="로고" className="h-auto" />
+                        <Image src="/images/logo.png" width={90} height={22} alt="Logo" className="h-auto" />
                     </Link>
                 </div>
 
-                <nav className="flex-1 space-y-4 overflow-y-auto">
-                    {/* Active Scene */}
-                    <div className="space-y-2">
-                        <div className="relative rounded-xl overflow-hidden border-2 border-[#6366F1] aspect-video">
-                            <img src="/api/placeholder/200/120" alt="Scene 1" className="object-cover w-full h-full opacity-60" />
-                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                                <img src="https://images.unsplash.com/photo-1522069169874-c58ec4b76be5?w=100" alt="Goldfish" className="w-12 h-12 object-contain" />
-                            </div>
-                        </div>
-                        <p className="text-xs text-[#6366F1] font-semibold">Scene 1: The Awakening</p>
+                <nav className="flex-1 space-y-6 overflow-y-auto custom-scrollbar pr-1">
+                    <div className="space-y-4">
+                        {info.scenes.map((scene, idx) => {
+                            const isActive = selectedIdx === idx;
+                            return (
+                                <div key={scene.sceneNumber} onClick={() => setSelectedIdx(idx)} className="group cursor-pointer">
+                                    <div className={`relative rounded-xl overflow-hidden aspect-video border-2 transition-all shadow-lg ${isActive ? 'border-primary-100' : 'border-white/5 opacity-40 hover:opacity-100'}`}>
+                                        <Image src={scene.firstFrameUrl} alt={scene.title} fill className="object-cover" />
+                                        {isGenerating[scene.sceneNumber] && <div className="absolute inset-0 bg-black/70 flex items-center justify-center"><RefreshCw className="w-4 h-4 text-primary-100 animate-spin" /></div>}
+                                    </div>
+                                    <p className={`mt-2 text-[10px] font-bold uppercase tracking-tighter transition-colors ${isActive ? 'text-primary-100' : 'text-white/20'}`}>
+                                        SCENE {scene.sceneNumber}
+                                    </p>
+                                </div>
+                            );
+                        })}
                     </div>
-
-                    {/* Empty Scenes */}
-                    {[2, 3, 4].map((i) => (
-                        <div key={i} className="space-y-2 group cursor-pointer">
-                            <div className="rounded-xl border border-dashed border-gray-700 aspect-video flex items-center justify-center bg-gray-900/50 group-hover:bg-gray-800 transition-colors">
-                                <p className="text-[10px] text-gray-500 text-center px-4">생성된 영상이 이곳에 나타나요</p>
-                            </div>
-                            <p className="text-xs text-gray-500">Scene {i}: Into The Mist</p>
-                        </div>
-                    ))}
                 </nav>
-
-                <button className="w-full py-3 bg-[#7C7FFF] text-white rounded-xl font-bold text-sm shadow-lg shadow-indigo-500/20">
-                    병합하기
-                </button>
             </aside>
 
             {/* Main Content */}
-            <main className="flex-1 flex flex-col bg-[#0B0B0C] overflow-hidden">
-                <header className="p-6 pb-2 shrink-0">
-                    <h2 className="text-xl font-black text-white italic tracking-tighter uppercase">Scene 1: The Awakening</h2>
+            <main className="flex-1 flex flex-col p-10 gap-8 overflow-hidden">
+                <header className="flex flex-col gap-2 shrink-0">
+                    <div className="flex items-center gap-2">
+                        <span className="w-6 h-[1px] bg-primary-100" />
+                        <span className="text-[9px] font-black text-primary-100 uppercase tracking-[0.4em]">Video Engine</span>
+                    </div>
+                    <h2 className="text-2xl font-black italic tracking-tighter uppercase whitespace-nowrap">
+                        {currentScene.title} <span className="text-white/10 ml-2 not-italic">({currentScene.sceneNumber})</span>
+                    </h2>
                 </header>
 
-                <div className="flex-1 flex flex-col p-6 pt-2 gap-4 overflow-hidden">
-                    <div className="flex-1 grid grid-cols-12 gap-4 min-h-0">
-                        {/* Video Preview Canvas */}
-                        <div className="col-span-8 h-full">
-                            <div className="relative bg-[#1A1A24] rounded-2xl aspect-video border border-white/5 flex flex-col items-center justify-center overflow-hidden h-full shadow-2xl">
-                                {/* Fake Background Video Content */}
-                                <img
-                                    src="https://images.unsplash.com/photo-1522069169874-c58ec4b76be5?w=800"
-                                    className="absolute inset-0 w-full h-full object-cover opacity-20 blur-sm"
-                                    alt="bg"
-                                />
-
-                                {/* Progress Overlay */}
-                                <div className="relative z-10 flex flex-col items-center text-center p-4">
-                                    <div className="bg-white/10 p-3 rounded-full mb-3">
-                                        <span className="text-white text-xl">✨</span>
+                <div className="flex-1 flex flex-col gap-8 overflow-hidden">
+                    {/* Row 1: Video Player + Keyframes */}
+                    <div className="flex-[5] flex gap-8 min-h-0">
+                        <div className="flex-[3] relative bg-[#111] rounded-[32px] overflow-hidden border border-white/5 shadow-2xl group">
+                            {isGeneratingCurrent ? (
+                                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/60 backdrop-blur-xl">
+                                    <div className="relative mb-6">
+                                        <RefreshCw className="w-10 h-10 text-primary-100 animate-spin" />
                                     </div>
-                                    <h3 className="text-white font-black mb-1 text-base italic tracking-tight">영상 생성하는 중..</h3>
-                                    <p className="text-[11px] text-white/30 mb-5 font-bold uppercase tracking-widest text-center leading-tight">AI가 당신의 영상을 멋지게 만들어주고 있어요</p>
-
-                                    <div className="w-56 h-1 bg-white/10 rounded-full overflow-hidden">
-                                        <div
-                                            className="h-full bg-white shadow-[0_0_10px_#fff] transition-all duration-500 ease-out"
-                                            style={{ width: `${progress}%` }}
-                                        ></div>
+                                    <p className="text-xs font-black uppercase tracking-[0.2em] mb-4">Generating...</p>
+                                    <div className="w-48 h-1 bg-white/5 rounded-full overflow-hidden">
+                                        <div className="h-full bg-primary-100 transition-all duration-1000" style={{ width: `${currentProgress}%` }} />
                                     </div>
-                                    <p className="mt-2 text-[10px] text-white/20 font-mono tracking-widest">{progress}% COMPLETE</p>
                                 </div>
-
-                                {/* Video Controls / Progress Bar */}
-                                <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent flex items-center gap-4">
-                                    <Play className="w-3.5 h-3.5 text-white fill-white" />
-                                    <div className="flex-1 h-0.5 bg-white/10 rounded-full overflow-hidden">
-                                        <div className="w-1/3 h-full bg-primary-100 shadow-[0_0_8px_rgba(255,255,255,0.4)]"></div>
+                            ) : currentScene.videoUrl ? (
+                                <video src={currentScene.videoUrl} controls autoPlay loop className="w-full h-full object-contain" />
+                            ) : (
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <Image src={currentScene.firstFrameUrl} alt="Preview" fill className="object-cover opacity-60" />
+                                    <div onClick={() => handleGenerateVideo(currentScene.sceneNumber)} className="z-10 w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center cursor-pointer hover:scale-110 transition-transform shadow-xl">
+                                        <Play className="w-6 h-6 text-white fill-white ml-1" />
                                     </div>
-                                    <span className="text-[9px] text-white/40 font-mono">00:04 / 00:12</span>
-                                    <Volume2 className="w-3.5 h-3.5 text-white/40" />
-                                    <Maximize2 className="w-3.5 h-3.5 text-white/40" />
                                 </div>
-                            </div>
+                            )}
                         </div>
 
-                        {/* Keyframes Panel */}
-                        <div className="col-span-4 bg-[#14141d] rounded-2xl p-4 border border-white/5 flex flex-col justify-between h-full shadow-xl">
-                            <div className="space-y-2">
-                                <label className="text-[9px] uppercase font-black text-white/30 tracking-[0.2em]">Start Frame</label>
-                                <div className="rounded-xl overflow-hidden border border-white/5 aspect-video shadow-inner">
-                                    <img src="https://images.unsplash.com/photo-1522069169874-c58ec4b76be5?w=400" alt="Start Frame" className="w-full h-full object-cover" />
-                                </div>
+                        <div className="flex-1 flex flex-col gap-4">
+                            <div className="flex-1 rounded-[24px] overflow-hidden border border-white/5 relative group/img">
+                                <Image src={currentScene.firstFrameUrl} alt="Start" fill className="object-cover opacity-80" />
+                                <div className="absolute bottom-2 left-3 text-[8px] font-black uppercase text-white/40 tracking-widest bg-black/60 px-2 py-1 rounded-md backdrop-blur-md">Start Frame</div>
                             </div>
-
-                            <div className="flex flex-col items-center py-0.5 opacity-50">
-                                <div className="bg-primary-100/10 p-1.5 rounded-full mb-1">
-                                    <ArrowDown className="text-primary-100 w-3.5 h-3.5" />
-                                </div>
-                                <span className="text-[8px] text-primary-100 font-black uppercase tracking-widest leading-none">Motion Path</span>
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-[9px] uppercase font-black text-white/30 tracking-[0.2em]">End Frame</label>
-                                <div className="rounded-xl overflow-hidden border border-white/5 aspect-video shadow-inner">
-                                    <img src="https://images.unsplash.com/photo-1546182990-dffeafbe841d?w=400" alt="End Frame" className="w-full h-full object-cover" />
-                                </div>
+                            <div className="flex-1 rounded-[24px] overflow-hidden border border-white/5 relative group/img">
+                                <Image src={currentScene.lastFrameUrl} alt="Last" fill className="object-cover opacity-80" />
+                                <div className="absolute bottom-2 left-3 text-[8px] font-black uppercase text-white/40 tracking-widest bg-black/60 px-2 py-1 rounded-md backdrop-blur-md">Last Frame</div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Prompt Editor - Full Width */}
-                    <div className="shrink-0 bg-[#16161a] rounded-2xl p-5 border border-white/5 space-y-3 shadow-2xl">
-                        <div className="flex justify-between items-center">
-                            <div className="space-y-1">
-                                <p className="text-[11px] font-black text-white/80 uppercase tracking-widest flex items-center gap-2 italic">
-                                   <Layers className="w-3.5 h-3.5 text-primary-100" /> PROMPT EDITOR
-                                </p>
-                                <p className="text-[9px] text-white/20 font-bold uppercase tracking-widest">AI generated prompt is editable in English</p>
-                            </div>
-                            <button className="flex items-center gap-2 bg-primary-100 hover:bg-primary-200 text-white px-5 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all shadow-xl shadow-primary-300/10 active:scale-95">
-                                <Video className="w-3.5 h-3.5" />
-                                GENERATE VIDEO
-                            </button>
+                    {/* Row 2: Prompt + Button */}
+                    <div className="flex-[2] bg-[#0D0D0F] border border-white/5 rounded-[32px] p-8 flex items-center gap-8 shadow-2xl">
+                        <div className="flex-1 h-full flex flex-col gap-3">
+                            <label className="text-[10px] font-black tracking-[0.4em] text-white/20 uppercase">Prompt Narrative</label>
+                            <textarea
+                                value={currentScene.combinedPrompt}
+                                onChange={(e) => handlePromptChange(e.target.value)}
+                                className="flex-1 bg-black/40 rounded-2xl p-6 border border-white/5 text-sm italic text-white/50 outline-none resize-none custom-scrollbar"
+                                placeholder="Describe the motion path..."
+                            />
                         </div>
-                        <div className="bg-[#0B0B0C] rounded-xl p-5 border border-white/5">
-                            <p className="text-[12px] leading-relaxed text-white/40 font-medium italic">
-                                A Slow Cinematic Dolly-In Through The Dark Corridors, Light Begins To Flicker And Beam Through The Cracks Of The Stone Walls. Dust Particles Dance In The Volumetric Lighting As The Camera Focuses On The Ancient Artifact At The End Of The Hall.
-                            </p>
-                        </div>
+                        <button 
+                            onClick={() => handleGenerateVideo(currentScene.sceneNumber)}
+                            disabled={isGeneratingCurrent}
+                            className="w-[200px] h-[100px] rounded-3xl bg-primary-100 hover:bg-primary-200 disabled:opacity-50 text-white flex flex-col items-center justify-center gap-2 font-black uppercase tracking-widest active:scale-95 transition-all shadow-lg shadow-primary-100/20"
+                        >
+                            <Video className="w-6 h-6" />
+                            <span className="text-[12px]">{isGeneratingCurrent ? "Waiting..." : "생성하기"}</span>
+                        </button>
                     </div>
                 </div>
             </main>
         </div>
+    );
+}
+
+export default function GeneratePage() {
+    return (
+        <Suspense fallback={<div className="h-screen bg-[#0B0B0C]" />}>
+            <GenerateContent />
+        </Suspense>
     );
 }

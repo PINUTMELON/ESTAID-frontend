@@ -28,6 +28,8 @@ export interface Scene {
   story: string;
   firstFrame: string;
   lastFrame: string;
+  firstFrameImageUrl?: string;
+  lastFrameImageUrl?: string;
   title: string;      // 씬 제목 추가
   imageUrl?: string;
 }
