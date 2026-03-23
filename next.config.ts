@@ -9,7 +9,7 @@ const nextConfig: NextConfig = {
         hostname: '*.fal.media',
       },
     ],
-  },
+  }
 };
 
 export default nextConfig;

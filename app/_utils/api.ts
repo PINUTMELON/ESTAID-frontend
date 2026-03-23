@@ -6,7 +6,7 @@
  * - 응답 형식: ApiResponse<T> { success, message, data }
  */
 
-const BASE_URL = "/api";
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
 /** 표준 API 응답 타입 */
 export interface ApiResponse<T> {
