@@ -7,7 +7,7 @@ const montserrat = Montserrat({
 });
 
 export const metadata: Metadata = {
-  title: "ESTAID - AI 2차 창작 플랫폼",
+  title: "Ploty - AI 2차 창작 플랫폼",
   description: "AI로 2차 창작 컨텐츠를 쉽게 만들어보세요",
 };
 
