@@ -112,94 +112,112 @@ export default function RankingPage() {
   const rest = items.slice(3);
 
   return (
-    <div className="min-h-screen text-white p-8 font-sans">
+    <div className="min-h-screen text-white p-8 font-sans max-w-[1200px] mx-auto">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight mb-2 uppercase italic text-white">Editor's Choice</h1>
-        <p className="text-indigo-400 text-sm font-medium tracking-tight">강렬한 몰입감을 선사하는 대표 시네마틱 작품 모음</p>
+      <div className="mb-10 text-center">
+        <h1 className="text-40 font-black tracking-tighter mb-2 uppercase italic text-white flex items-center justify-center gap-3">
+          <div className="w-12 h-1 bg-indigo-500 rounded-full" />
+          TOP RANKING
+          <div className="w-12 h-1 bg-indigo-500 rounded-full" />
+        </h1>
+        <p className="text-indigo-400/60 text-12 font-bold tracking-[0.3em] uppercase">The Most Captivating Cinematic Creations</p>
       </div>
 
-      {/* Hero Section (Grid) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-12">
-        {/* Main Card (No. 1) */}
-        {top1 && (
-          <div className="lg:col-span-2 relative bg-[#1a1a20] rounded-3xl overflow-hidden group border border-white/5 cursor-pointer" onClick={() => handleSelectItem(top1)}>
-            <div className="absolute top-6 left-6 z-10 bg-indigo-500 w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg shadow-xl border border-white/20">1</div>
-            <img
-              src={top1.thumbnailImageUrl || top1.backgroundImageUrl || "/api/placeholder/800/450"}
-              alt={top1.title}
-              className="w-full h-80 object-cover opacity-80 group-hover:scale-105 transition-transform duration-700"
-            />
-            <div className="p-8">
-              <div className="flex items-center gap-3 mb-4">
-                <span className="bg-indigo-500/30 text-indigo-300 px-3 py-1 rounded-full text-xs font-bold border border-indigo-500/20">Masterpiece</span>
-                <div className="flex items-center gap-1.5 text-indigo-400 text-sm font-black">
-                  <Star size={16} fill="currentColor" /> {top1.averageRating.toFixed(1)}
+      {/* Hero Section (Pedestal Style) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-16 items-end">
+        {/* No. 2 */}
+        {top2 && (
+          <div 
+            className="order-2 md:order-1 relative bg-[#1a1a20] rounded-[32px] overflow-hidden group border border-white/5 cursor-pointer h-[280px] hover:border-indigo-500/30 transition-all shadow-2xl" 
+            onClick={() => handleSelectItem(top2)}
+          >
+            <div className="absolute top-4 left-4 z-10 bg-slate-400 w-8 h-8 rounded-xl flex items-center justify-center font-black text-sm shadow-lg border border-white/10 italic">2</div>
+            <img src={top2.thumbnailImageUrl || top2.backgroundImageUrl || "/api/placeholder/400/225"} className="w-full h-full object-cover opacity-60 group-hover:scale-110 transition-transform duration-700" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent p-6 flex flex-col justify-end">
+              <h3 className="text-18 font-bold mb-1 truncate italic tracking-tight">{top2.title}</h3>
+              <div className="flex justify-between items-center text-xs font-bold uppercase tracking-widest text-indigo-400">
+                <span>@{top2.ownerUsername}</span>
+                <div className="flex items-center gap-1">
+                  <Star size={12} fill="currentColor" /> {top2.averageRating.toFixed(1)}
                 </div>
-              </div>
-              <h2 className="text-4xl font-bold mb-6 italic tracking-tighter uppercase leading-none">{top1.title}</h2>
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3 text-gray-400">
-                  <div className="bg-gray-700/50 p-2 rounded-full border border-white/5"><User size={16} /></div>
-                  <span className="text-sm font-medium">@{top1.ownerUsername}</span>
-                </div>
-                <button 
-                  onClick={(e) => { e.stopPropagation(); handleSelectItem(top1); }}
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white px-10 py-3 rounded-full font-bold flex items-center gap-3 transition-all shadow-xl shadow-indigo-500/20 active:scale-95"
-                >
-                  지금 보기 <Play size={14} fill="currentColor" />
-                </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Small Cards (No. 2 & 3) */}
-        <div className="flex flex-col gap-6">
-          {[top2, top3].filter(Boolean).map((item, idx) => (
-            <div key={item.projectId} onClick={() => handleSelectItem(item)} className="relative bg-[#1a1a20] rounded-3xl overflow-hidden flex-1 group border border-white/5 cursor-pointer hover:border-indigo-500/30 transition-all shadow-2xl">
-              <div className="absolute top-4 left-4 z-10 bg-indigo-500 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shadow-lg border border-white/10">{idx + 2}</div>
-              <img src={item.thumbnailImageUrl || item.backgroundImageUrl || "/api/placeholder/400/225"} className="w-full h-40 object-cover opacity-60 group-hover:scale-110 transition-transform duration-500" />
-              <div className="p-5">
-                <h3 className="text-xl font-bold mb-2 truncate italic tracking-tight">{item.title}</h3>
-                <div className="flex justify-between text-gray-500 text-xs font-bold uppercase tracking-widest">
-                  <span>{item.ratingCount} Users</span>
-                  <span className="flex items-center gap-1.5 text-indigo-400">
-                    <Star size={12} fill="currentColor" /> {item.averageRating.toFixed(1)}
-                  </span>
+        {/* No. 1 - Featured */}
+        {top1 && (
+          <div 
+            className="order-1 md:order-2 relative bg-[#1a1a20] rounded-[40px] overflow-hidden group border-2 border-indigo-500/20 cursor-pointer h-[360px] shadow-[0_0_50px_rgba(79,70,229,0.15)] transition-all z-10 scale-105" 
+            onClick={() => handleSelectItem(top1)}
+          >
+            <div className="absolute top-6 left-6 z-10 bg-indigo-500 w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xl shadow-2xl border border-white/20 italic">1</div>
+            <img src={top1.thumbnailImageUrl || top1.backgroundImageUrl || "/api/placeholder/800/450"} className="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-1000" />
+            <div className="absolute inset-0 bg-gradient-to-t from-indigo-950/90 via-black/20 to-transparent p-8 flex flex-col justify-end">
+              <div className="mb-2">
+                <span className="bg-indigo-500 text-white px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-lg">Editor's Choice</span>
+              </div>
+              <h2 className="text-28 font-black mb-1 italic tracking-tighter uppercase leading-tight">{top1.title}</h2>
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-bold text-white/60 lowercase italic">by @{top1.ownerUsername}</span>
+                <div className="flex items-center gap-2 text-indigo-400 font-black text-18">
+                  <Star size={20} fill="currentColor" /> {top1.averageRating.toFixed(1)}
                 </div>
               </div>
             </div>
-          ))}
-        </div>
+          </div>
+        )}
+
+        {/* No. 3 */}
+        {top3 && (
+          <div 
+            className="order-3 relative bg-[#1a1a20] rounded-[32px] overflow-hidden group border border-white/5 cursor-pointer h-[240px] hover:border-indigo-500/30 transition-all shadow-2xl" 
+            onClick={() => handleSelectItem(top3)}
+          >
+            <div className="absolute top-4 left-4 z-10 bg-[#cd7f32] w-8 h-8 rounded-xl flex items-center justify-center font-black text-sm shadow-lg border border-white/10 italic">3</div>
+            <img src={top3.thumbnailImageUrl || top3.backgroundImageUrl || "/api/placeholder/400/225"} className="w-full h-full object-cover opacity-50 group-hover:scale-110 transition-transform duration-700" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent p-6 flex flex-col justify-end">
+              <h3 className="text-16 font-bold mb-1 truncate italic tracking-tight">{top3.title}</h3>
+              <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-indigo-400">
+                <span>@{top3.ownerUsername}</span>
+                <div className="flex items-center gap-1">
+                  <Star size={10} fill="currentColor" /> {top3.averageRating.toFixed(1)}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* List Section */}
-      <div>
-        <div className="flex items-center gap-2 mb-6">
-          <div className="w-6 h-1 bg-indigo-500 rounded-full"></div>
-          <h2 className="text-xl font-bold uppercase tracking-widest">상위 인기 콘텐츠</h2>
+      <div className="max-w-4xl mx-auto">
+        <div className="flex items-center gap-3 mb-8">
+          <div className="w-10 h-[1px] bg-white/10" />
+          <h2 className="text-14 font-black uppercase tracking-[0.4em] text-white/40">Cinematic Contenders</h2>
+          <div className="flex-grow h-[1px] bg-white/10" />
         </div>
 
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3">
           {rest.map((item) => (
-            <div key={item.projectId} onClick={() => handleSelectItem(item)} className="bg-[#1a1a20] p-4 rounded-2xl flex items-center group hover:bg-[#25252d] transition-all cursor-pointer border border-white/5 shadow-xl">
-              <div className="text-3xl font-black text-indigo-900/40 w-16 text-center italic transition-colors group-hover:text-indigo-600/60 leading-none">
-                {item.rank.toString().padStart(2, '0')}
+            <div key={item.projectId} onClick={() => handleSelectItem(item)} className="bg-[#1a1a20]/40 p-3 rounded-2xl flex items-center group hover:bg-[#1a1a20] transition-all cursor-pointer border border-white/5 shadow-xl hover:translate-x-1 duration-300">
+              <div className="text-24 font-black text-white/5 w-14 text-center italic transition-colors group-hover:text-indigo-500/40 leading-none">
+                {item.rank}
               </div>
-              <div className="relative w-32 h-20 rounded-xl overflow-hidden flex-shrink-0 border border-white/5">
+              <div className="relative w-28 h-16 rounded-xl overflow-hidden flex-shrink-0 border border-white/5">
                 <img src={item.thumbnailImageUrl || item.backgroundImageUrl || "/api/placeholder/200/120"} alt={item.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
               </div>
-              <div className="ml-6 flex-grow">
-                <h4 className="text-lg font-bold italic tracking-tight mb-1 group-hover:text-indigo-400 transition-colors uppercase">{item.title}</h4>
-                <p className="text-indigo-400/60 text-xs font-bold uppercase tracking-widest">@{item.ownerUsername}</p>
+              <div className="ml-5 flex-grow">
+                <h4 className="text-16 font-bold italic tracking-tight mb-0.5 group-hover:text-indigo-400 transition-colors uppercase">{item.title}</h4>
+                <p className="text-white/20 text-[10px] font-black uppercase tracking-widest">@{item.ownerUsername}</p>
               </div>
-              <div className="flex items-center gap-10 text-sm font-bold">
-                <div className="flex items-center gap-2 text-indigo-400">
-                  <Star size={16} fill="currentColor" />
-                  <span className="text-white text-16">{item.averageRating.toFixed(1)}</span>
+              <div className="flex items-center gap-8 pr-4">
+                <div className="flex items-center gap-1.5 text-indigo-400">
+                  <Star size={14} fill="currentColor" />
+                  <span className="text-white text-14 font-black">{item.averageRating.toFixed(1)}</span>
                 </div>
-                <span className="text-gray-500 text-xs uppercase tracking-widest">{item.ratingCount} reviews</span>
+                <div className="bg-white/5 px-3 py-1 rounded-full border border-white/5">
+                  <span className="text-white/30 text-[9px] uppercase font-black tracking-widest">{item.ratingCount} Users</span>
+                </div>
               </div>
             </div>
           ))}
